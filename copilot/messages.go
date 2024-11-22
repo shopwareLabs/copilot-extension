@@ -1,0 +1,82 @@
+package copilot
+
+import "github.com/invopop/jsonschema"
+
+type ChatRequest struct {
+	Messages []ChatMessage `json:"messages"`
+}
+
+type ChatMessage struct {
+	Role          string              `json:"role"`
+	Content       string              `json:"content"`
+	Confirmations []*ChatConfirmation `json:"copilot_confirmations"`
+	ToolCalls     []*ToolCall         `json:"tool_calls"`
+}
+
+type ToolCall struct {
+	Function *ChatMessageFunctionCall `json:"function"`
+}
+
+type ChatMessageFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type ChatConfirmation struct {
+	State        string            `json:"state"`
+	Confirmation *ConfirmationData `json:"confirmation"`
+}
+
+type ConfirmationData struct {
+	Owner string `json:"owner"`
+	Repo  string `json:"repo"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
+type Model string
+
+const (
+	ModelGPT35      Model = "gpt-3.5-turbo"
+	ModelGPT4       Model = "gpt-4"
+	ModelGPT4O      Model = "gpt-40"
+	ModelEmbeddings Model = "text-embedding-ada-002"
+)
+
+type ChatCompletionsRequest struct {
+	Messages []ChatMessage  `json:"messages"`
+	Model    Model          `json:"model"`
+	Tools    []FunctionTool `json:"tools"`
+	Stream   bool           `json:"stream"`
+}
+
+type FunctionTool struct {
+	Type     string   `json:"type"`
+	Function Function `json:"function"`
+}
+
+type Function struct {
+	Name        string             `json:"name"`
+	Description string             `json:"description,omitempty"`
+	Parameters  *jsonschema.Schema `json:"parameters"`
+}
+
+type EmbeddingsRequest struct {
+	Model Model    `json:"model"`
+	Input []string `json:"input"`
+}
+
+type EmbeddingsResponse struct {
+	Data  []*EmbeddingsResponseData `json:"data"`
+	Usage *EmbeddingsResponseUsage  `json:"usage"`
+}
+
+type EmbeddingsResponseData struct {
+	Embedding []float32 `json:"embedding"`
+	Index     int       `json:"index"`
+}
+
+type EmbeddingsResponseUsage struct {
+	PromptTokens int `json:"prompt_tokens"`
+	TotalTokens  int `json:"total_tokens"`
+}
