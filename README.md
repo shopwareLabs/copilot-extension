@@ -35,3 +35,6 @@ For the client id and client secret you need to create an app in your github acc
 The local GITHUB_TOKEN must be right now dumped, by adding a log into the `service.go` file and using once the agent.
 
 After that you can run the `index` command to embed all files in the `data` directory to the vector database.
+
+Alternatively, you can download the `db.zip` from the release and unzip it into the root directory.
+
