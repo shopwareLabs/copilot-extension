@@ -28,6 +28,7 @@ func (w *sseWriter) writeData(v any) error {
 	if err := json.NewEncoder(w.w).Encode(v); err != nil {
 		return err
 	}
+
 	_, _ = w.w.Write([]byte("\n")) // Encode() adds one newline, so add only one more here.
 	return nil
 }
@@ -57,4 +58,23 @@ type sseResponseChoice struct {
 type sseResponseMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+type sseError struct {
+	Type       string `json:"type"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	Identifier string `json:"identifier"`
+}
+
+type sseReference struct {
+	Type     string               `json:"type"`
+	ID       string               `json:"id"`
+	Metadata sseReferenceMetadata `json:"metadata"`
+}
+
+type sseReferenceMetadata struct {
+	DisplayName string `json:"display_name"`
+	DisplayIcon string `json:"display_icon"`
+	DisplayURL  string `json:"display_url"`
 }

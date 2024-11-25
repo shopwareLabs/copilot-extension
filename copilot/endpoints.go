@@ -5,13 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/go-retryablehttp"
 )
 
-func ChatCompletions(ctx context.Context, client *retryablehttp.Client, integrationID, apiKey string, req *ChatCompletionsRequest) (io.ReadCloser, error) {
+func ChatCompletions(ctx context.Context, client *retryablehttp.Client, integrationID, apiKey string, req *ChatCompletionsRequest) (*ChatCompletionsResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -37,7 +36,13 @@ func ChatCompletions(ctx context.Context, client *retryablehttp.Client, integrat
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	return resp.Body, nil
+	var chatRes *ChatCompletionsResponse
+	err = json.NewDecoder(resp.Body).Decode(&chatRes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+
+	return chatRes, nil
 }
 
 func Embeddings(ctx context.Context, client *retryablehttp.Client, integrationID string, token string, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {

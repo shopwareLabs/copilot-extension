@@ -14,8 +14,8 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "rag-extension",
-	Short: "A simple extension for Copilot",
+	Use:   "copilot-extension",
+	Short: "Shopware Copilot Extension",
 }
 
 func main() {

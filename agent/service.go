@@ -1,18 +1,18 @@
 package agent
 
 import (
-	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -20,6 +20,8 @@ import (
 	"github.com/philippgille/chromem-go"
 	"github.com/shopwarelabs/copilot-extension/copilot"
 )
+
+var fileRegexp = regexp.MustCompile(`(?m)^(.*\.\w+)_\d+$`)
 
 // Service provides and endpoint for this agent to perform chat completions
 type Service struct {
@@ -35,47 +37,47 @@ func NewService(pubKey *ecdsa.PublicKey, collection *chromem.Collection) *Servic
 }
 
 func (s *Service) ChatCompletion(w http.ResponseWriter, r *http.Request) {
-	// sig := r.Header.Get("Github-Public-Key-Signature")
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println(fmt.Errorf("failed to read request body: %w", err))
+		log.Infof("failed to read request body: %w", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	// Make sure the payload matches the signature. In this way, you can be sure
 	// that an incoming request comes from github
-	// isValid, err := validPayload(body, sig, s.pubKey)
-	// if err != nil {
-	// 	fmt.Printf("failed to validate payload signature: %v\n", err)
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	return
-	// }
-	// if !isValid {
-	// 	http.Error(w, "invalid payload signature", http.StatusUnauthorized)
-	// 	return
-	// }
+
+	isValid, err := validPayload(body, r.Header.Get("Github-Public-Key-Signature"), s.pubKey)
+	if err != nil {
+		log.Infof("failed to validate payload signature: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if !isValid {
+		http.Error(w, "invalid payload signature", http.StatusUnauthorized)
+		return
+	}
 
 	apiToken := r.Header.Get("X-GitHub-Token")
 	integrationID := r.Header.Get("Copilot-Integration-Id")
 
-	log.Infof("Token: %s", apiToken)
-
 	var req *copilot.ChatRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		fmt.Printf("failed to unmarshal request: %v\n", err)
+		log.Infof("failed to unmarshal request: %v\n", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if err := s.generateCompletion(r.Context(), integrationID, apiToken, req, w); err != nil {
-		fmt.Printf("failed to execute agent: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
+
+	if err := s.generateCompletion(r.Context(), integrationID, apiToken, req, NewSSEWriter(w)); err != nil {
+		log.Infof("failed to execute agent: %v\n", err)
 	}
 }
 
-func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToken string, req *copilot.ChatRequest, w io.Writer) error {
+func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToken string, req *copilot.ChatRequest, w *sseWriter) error {
 	var messages []copilot.ChatMessage
+	copilotReferences := []sseReference{}
+
+	messages = append(messages, req.Messages...)
 
 	// Create embeddings from user messages
 	for i := len(req.Messages) - 1; i >= 0; i++ {
@@ -112,57 +114,105 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 
 		log.Infof("Query took %s", time.Since(startTime))
 
-		log.Infof("Following documents were found:")
-
 		contextMessage := ""
 
 		for _, doc := range res {
-			log.Infof("ID: %s", doc.ID)
+			link := "unknown"
+			fileName := doc.ID
+
+			if strings.HasPrefix(doc.ID, "data/docs/") {
+				fileName = fileRegexp.FindStringSubmatch(strings.TrimPrefix(doc.ID, "data/docs/"))[1]
+
+				link = fmt.Sprintf("https://github.com/shopware/docs/blob/main/%s", fileName)
+			} else if strings.HasPrefix(doc.ID, "data/src/") {
+				fileName = fileRegexp.FindStringSubmatch(strings.TrimPrefix(doc.ID, "data/"))[1]
+
+				link = fmt.Sprintf("https://github.com/shopware/shopware/blob/trunk/%s", fileName)
+			}
+
+			copilotReferences = append(copilotReferences, sseReference{
+				Type: "document",
+				ID:   doc.ID,
+				Metadata: sseReferenceMetadata{
+					DisplayName: fileName,
+					DisplayIcon: "icon",
+					DisplayURL:  link,
+				},
+			})
+
 			contextMessage += doc.Content + "\n"
 		}
 
 		messages = append(messages, copilot.ChatMessage{
 			Role: "system",
 			Content: "You are a specialized technical chatbot for Shopware 6 development. Your primary goal is to assist developers with precise and accurate technical information about Shopware 6. Always provide detailed, developer-focused responses that cover both theoretical concepts and practical implementation. When asked, generate relevant code examples and explain them thoroughly, including best practices for Shopware 6 development. Your knowledge is based on the provided Shopware 6 documentation and code examples. If you're unsure about something, admit it and suggest where the user might find more information. Respond in a clear, concise, and technical manner suitable for developers. Use proper formatting for code snippets and technical terms. When explaining concepts, break them down into easily understandable parts. If providing step-by-step instructions, number them clearly. Always strive for accuracy and completeness in your responses. If a question is ambiguous, ask for clarification to ensure you provide the most relevant information.\n" +
-				"Context: " + contextMessage,
+				"Context: " + contextMessage + "\nWhen calling get_store_extension pass all app/plugin/extension names",
 		})
 
 		break
 	}
 
-	messages = append(messages, req.Messages...)
+	usedTools := []string{}
 
-	chatReq := &copilot.ChatCompletionsRequest{
-		Model:    copilot.ModelGPT4,
-		Messages: messages,
-		Stream:   true,
-	}
+	for {
+		chatReq := &copilot.ChatCompletionsRequest{
+			Model:    copilot.ModelGPT4,
+			Messages: messages,
+			Tools:    tools.RemoveTool(usedTools),
+		}
 
-	stream, err := copilot.ChatCompletions(ctx, retryablehttp.NewClient(), "copilot-chat", apiToken, chatReq)
-	if err != nil {
-		return fmt.Errorf("failed to get chat completions stream: %w", err)
-	}
-	defer stream.Close()
-
-	reader := bufio.NewScanner(stream)
-	for reader.Scan() {
-		buf := reader.Bytes()
-		_, err := w.Write(buf)
+		res, err := copilot.ChatCompletions(ctx, retryablehttp.NewClient(), integrationID, apiToken, chatReq)
 		if err != nil {
-			return fmt.Errorf("failed to write to stream: %w", err)
+			return fmt.Errorf("failed to get chat completions stream: %w", err)
 		}
 
-		if _, err := w.Write([]byte("\n")); err != nil {
-			return fmt.Errorf("failed to write delimiter to stream: %w", err)
-		}
-	}
+		function := getFunctionCall(res)
 
-	if err := reader.Err(); err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
+		if function != nil {
+			usedTools = append(usedTools, function.Name)
+			log.Debugf("Function CALL: %s", function.Name)
 
-		return fmt.Errorf("failed to read from stream: %w", err)
+			msg, err := handleFunction(ctx, function)
+
+			if err != nil {
+				w.writeEvent("copilot_errors")
+				w.writeData([]sseError{{Type: "function", Code: "failed", Message: err.Error(), Identifier: function.Name}})
+				w.writeDone()
+
+				return fmt.Errorf("failed to handle function: %w", err)
+			}
+
+			messages = append(messages, *msg)
+
+			log.Infof("Responded function call")
+
+			continue
+		} else {
+			log.Infof("Responded normal message")
+			choices := make([]sseResponseChoice, len(res.Choices))
+			for i, choice := range res.Choices {
+				choices[i] = sseResponseChoice{
+					Index: choice.Index,
+					Delta: sseResponseMessage{
+						Role:    choice.Message.Role,
+						Content: choice.Message.Content,
+					},
+				}
+			}
+
+			// w.writeEvent("copilot_references")
+			// w.writeData(copilotReferences)
+
+			// w.writeDone()
+
+			w.writeData(sseResponse{
+				Choices: choices,
+			})
+
+			w.writeDone()
+
+			break
+		}
 	}
 
 	return nil
@@ -188,4 +238,21 @@ func validPayload(data []byte, sig string, publicKey *ecdsa.PublicKey) (bool, er
 	// Verify the SHA256 encoded payload against the signature with GitHub's Key
 	digest := sha256.Sum256(data)
 	return ecdsa.Verify(publicKey, digest[:], parsedSig.R, parsedSig.S), nil
+}
+
+func getFunctionCall(res *copilot.ChatCompletionsResponse) *copilot.ChatMessageFunctionCall {
+	if len(res.Choices) == 0 {
+		return nil
+	}
+
+	if len(res.Choices[0].Message.ToolCalls) == 0 {
+		return nil
+	}
+
+	funcCall := res.Choices[0].Message.ToolCalls[0].Function
+	if funcCall == nil {
+		return nil
+	}
+	return funcCall
+
 }

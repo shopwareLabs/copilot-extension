@@ -21,7 +21,7 @@ import (
 
 var indexCommand = &cobra.Command{
 	Use:   "index",
-	Short: "index",
+	Short: "Embed all files in the data directory to the vector database",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		collection, err := config.GetCollection()
 

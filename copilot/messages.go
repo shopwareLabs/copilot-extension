@@ -80,3 +80,12 @@ type EmbeddingsResponseUsage struct {
 	PromptTokens int `json:"prompt_tokens"`
 	TotalTokens  int `json:"total_tokens"`
 }
+
+type ChatCompletionsResponse struct {
+	Choices []ChatChoice `json:"choices"`
+}
+
+type ChatChoice struct {
+	Index   int         `json:"index"`
+	Message ChatMessage `json:"message"`
+}
