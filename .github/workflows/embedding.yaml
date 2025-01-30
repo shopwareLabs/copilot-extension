@@ -1,0 +1,24 @@
+name: Generate Embeddings
+on:
+    push:
+        branches:
+            - use-ollama-for-embeddings
+
+jobs:
+    generate_embeddings:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v4
+            - name: Fetch Data
+              run: make fetch-data
+            - name: Install Ollama
+              run: curl -fsSL https://ollama.com/install.sh | sh
+            - name: Pull Model
+              run: ollama pull mxbai-embed-large
+
+            - name: Generate Embeddings
+              run: go run . index
+              env:
+                CLIENT_ID: asd
+                CLIENT_SECRET: asd
+                FQDN: http://localhost
