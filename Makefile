@@ -3,7 +3,7 @@ fetch-data:
 	git clone --depth=1 https://github.com/shopware/shopware.git data
 	composer install -d data --no-scripts
 	./data/bin/console list --format json > data/commands.json
-	node cli-console-markdown.js > all-commands.md
+	node cli-console-markdown.mjs > all-commands.md
 	cd data && rm -rf .git && find . -mindepth 1 ! -regex '^./src.*' -delete
 	rm -rf data/src/WebInstaller
 	rm -f data/src/Administration/{README.md,LICENSE}
