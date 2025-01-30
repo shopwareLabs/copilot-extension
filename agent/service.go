@@ -93,20 +93,7 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 
 		startTime := time.Now()
 
-		embeddings, err := copilot.Embeddings(ctx, retryablehttp.NewClient(), integrationID, apiToken, &copilot.EmbeddingsRequest{
-			Model: copilot.ModelEmbeddings,
-			Input: []string{msg.Content},
-		})
-
-		if err != nil {
-			return fmt.Errorf("failed to get embeddings: %w", err)
-		}
-
-		log.Infof("Embeddings took %s", time.Since(startTime))
-
-		startTime = time.Now()
-
-		res, err := s.collection.QueryEmbedding(ctx, embeddings.Data[0].Embedding, 5, nil, nil)
+		res, err := s.collection.Query(ctx, msg.Content, 5, nil, nil)
 
 		if err != nil {
 			return fmt.Errorf("failed to query collection: %w", err)

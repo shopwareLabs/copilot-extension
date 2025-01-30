@@ -1,8 +1,6 @@
 module github.com/shopwarelabs/copilot-extension
 
-go 1.23
-
-toolchain go1.23.3
+go 1.23.4
 
 require (
 	github.com/charmbracelet/log v0.4.0
@@ -11,20 +9,18 @@ require (
 	github.com/philippgille/chromem-go v0.7.0
 	github.com/spf13/cobra v1.8.1
 	github.com/tmc/langchaingo v0.1.12
-	golang.org/x/oauth2 v0.24.0
 	github.com/wk8/go-ordered-map/v2 v2.1.8
+	golang.org/x/oauth2 v0.24.0
 )
 
 require (
-	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/mailru/easyjson v0.7.7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	github.com/AssemblyAI/assemblyai-go-sdk v1.9.0 // indirect
 	github.com/PuerkitoBio/goquery v1.10.0 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/charmbracelet/lipgloss v0.10.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
@@ -37,6 +33,7 @@ require (
 	github.com/invopop/jsonschema v0.12.0
 	github.com/ledongthuc/pdf v0.0.0-20240201131950-da5b75280b06 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
@@ -52,6 +49,7 @@ require (
 	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f // indirect
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	golang.org/x/net v0.29.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

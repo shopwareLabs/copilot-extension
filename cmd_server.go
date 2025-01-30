@@ -52,8 +52,8 @@ var serverCmd = &cobra.Command{
 
 		http.HandleFunc("/agent", agentService.ChatCompletion)
 
-		fmt.Println("Listening on port", config.Port)
-		return http.ListenAndServe(":"+config.Port, nil)
+		fmt.Println("Listening on port 8000")
+		return http.ListenAndServe(":8000", nil)
 	},
 }
 

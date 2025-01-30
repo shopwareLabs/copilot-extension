@@ -1,0 +1,7 @@
+services:
+  ollama:
+    build:
+      dockerfile: Dockerfile.ollama
+    ports:
+      - 11434:11434
+

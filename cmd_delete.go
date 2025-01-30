@@ -10,7 +10,13 @@ var deleteCmd = &cobra.Command{
 	Short: "Delete document from vector db",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		collection, err := config.GetCollection()
+		cfg, err := config.New()
+
+		if err != nil {
+			return err
+		}
+
+		collection, err := config.GetCollection(cfg)
 
 		if err != nil {
 			return err
