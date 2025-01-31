@@ -8,11 +8,18 @@ jobs:
     generate_embeddings:
         runs-on: ubuntu-24.04
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout
+              uses: actions/checkout@v4
+
             - name: Fetch Data
               run: make fetch-data
+
+            - name: Download current DB
+              run: make fetch-db
+
             - name: Install Ollama
               run: curl -fsSL https://ollama.com/install.sh | sh
+
             - name: Pull Model
               run: ollama pull mxbai-embed-large
 
@@ -22,3 +29,15 @@ jobs:
                 CLIENT_ID: asd
                 CLIENT_SECRET: asd
                 FQDN: http://localhost
+
+            - name: Create DB.zip
+              run: zip -r db.zip db
+
+            - name: Upload binaries to release
+              uses: svenstaro/upload-release-action@v2
+              with:
+                repo_token: ${{ secrets.GITHUB_TOKEN }}
+                file: db.zip
+                asset_name: db.zip
+                tag: '0.0.1'
+                overwrite: true

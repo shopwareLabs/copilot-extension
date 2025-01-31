@@ -104,14 +104,19 @@ var indexCommand = &cobra.Command{
 					log.Infof("Indexing [%d/%d] %s", job.index+1, job.total, job.fileName)
 
 					for idx, doc := range docs {
-						if err := collection.AddDocument(cmd.Context(), chromem.Document{
-							ID:      fmt.Sprintf("%s_%d", job.fileName, idx),
-							Content: doc.PageContent,
-						}); err != nil {
-							log.Error("failed to index document", "error", err)
-							continue
+						documentId := fmt.Sprintf("%s_%d", job.fileName, idx)
+
+						lookupDoc, err := collection.GetByID(cmd.Context(), documentId)
+
+						if err != nil || lookupDoc.Content != doc.PageContent {
+							if err := collection.AddDocument(cmd.Context(), chromem.Document{
+								ID:      fmt.Sprintf("%s_%d", job.fileName, idx),
+								Content: doc.PageContent,
+							}); err != nil {
+								log.Error("failed to index document", "error", err)
+								continue
+							}
 						}
-						log.Infof("Indexed [%d/%d] %s", idx+1, len(docs), job.fileName)
 					}
 				}
 			}()

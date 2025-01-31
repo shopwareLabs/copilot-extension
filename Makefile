@@ -28,3 +28,8 @@ fetch-data:
 	rm -rf data/frontends/ai data/frontends/.assets data/frontends/public
 	mv all-commands.md data/docs/
 
+fetch-db:
+	rm -rf db
+	curl -L -o db.zip https://github.com/shopwareLabs/copilot-extension/releases/download/0.0.1/db.zip
+	unzip -o db.zip
+	rm db.zip
