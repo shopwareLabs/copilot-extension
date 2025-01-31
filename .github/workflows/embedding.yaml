@@ -73,6 +73,9 @@ jobs:
             cache-to: type=gha,scope=copilot,mode=max
             provenance: false
 
+        - name: Notify Portainer
+          run: curl -X POST ${{ secrets.PORTAINER_WEBHOOK }}
+
     build-ollama:
       runs-on: ubuntu-24.04-arm
       steps:
