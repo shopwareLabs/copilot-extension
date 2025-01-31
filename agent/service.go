@@ -82,6 +82,10 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 
 	messages = append(messages, req.Messages...)
 
+	loopAgainForTool := false
+
+	function := &copilot.ChatMessageFunctionCall{}
+
 	// Create embeddings from user messages
 	for i := len(req.Messages) - 1; i >= 0; i++ {
 		msg := req.Messages[i]
@@ -150,62 +154,85 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 			Model:    copilot.ModelGPT4,
 			Messages: messages,
 			Tools:    tools.RemoveTool(usedTools),
+			Stream:   true,
 		}
 
-		res, err := copilot.ChatCompletions(ctx, retryablehttp.NewClient(), integrationID, apiToken, chatReq)
+		stream, err := copilot.StreamChatCompletions(ctx, retryablehttp.NewClient(), integrationID, apiToken, chatReq)
 		if err != nil {
 			return fmt.Errorf("failed to get chat completions stream: %w", err)
 		}
 
-		log.Infof("Copilot API took %s", time.Since(startTime))
-
-		function := getFunctionCall(res)
-
-		if function != nil {
-			usedTools = append(usedTools, function.Name)
-			log.Infof("Function CALL: %s", function.Name)
-
-			msg, err := handleFunction(ctx, function)
-
-			if err != nil {
-				w.writeEvent("copilot_errors")
-				w.writeData([]sseError{{Type: "function", Code: "failed", Message: err.Error(), Identifier: function.Name}})
-				w.writeDone()
-
-				return fmt.Errorf("failed to handle function: %w", err)
+		for streamResp := range stream {
+			if streamResp.Error != nil {
+				return fmt.Errorf("stream error: %w", streamResp.Error)
 			}
 
-			messages = append(messages, *msg)
+			if isFunctionCall(streamResp.Response) {
+				if len(streamResp.Response.Choices[0].Delta.ToolCalls) > 0 {
+					if streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Name != "" {
+						function.Name = function.Name + streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Name
+					}
 
-			log.Infof("Responded function call")
+					if streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Arguments != "" {
+						function.Arguments = function.Arguments + streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Arguments
+					}
+				}
 
-			continue
-		} else {
-			log.Infof("Responded normal message")
-			choices := make([]sseResponseChoice, len(res.Choices))
-			for i, choice := range res.Choices {
-				choices[i] = sseResponseChoice{
-					Index: choice.Index,
-					Delta: sseResponseMessage{
-						Role:    choice.Message.Role,
-						Content: choice.Message.Content,
-					},
+				if streamResp.Response.Choices[0].FinishReason == "tool_calls" {
+					usedTools = append(usedTools, function.Name)
+					log.Infof("Function CALL: %s", function.Name)
+
+					msg, err := handleFunction(ctx, function)
+
+					function.Name = ""
+					function.Arguments = ""
+
+					if err != nil {
+						w.writeEvent("copilot_errors")
+						w.writeData([]sseError{{Type: "function", Code: "failed", Message: err.Error(), Identifier: function.Name}})
+						w.writeDone()
+
+						return fmt.Errorf("failed to handle function: %w", err)
+					}
+
+					messages = append(messages, *msg)
+
+					log.Infof("Responded function call")
+
+					loopAgainForTool = true
+
+					break
+				}
+			} else {
+				if len(streamResp.Response.Choices) > 0 {
+
+					choices := make([]sseResponseChoice, len(streamResp.Response.Choices))
+					for i, choice := range streamResp.Response.Choices {
+						choices[i] = sseResponseChoice{
+							Index: choice.Index,
+							Delta: sseResponseMessage{
+								Role:    "assistant",
+								Content: choice.Delta.Content,
+							},
+						}
+					}
+
+					w.writeData(sseResponse{
+						Choices: choices,
+					})
 				}
 			}
-
-			// w.writeEvent("copilot_references")
-			// w.writeData(copilotReferences)
-
-			// w.writeDone()
-
-			w.writeData(sseResponse{
-				Choices: choices,
-			})
-
-			w.writeDone()
-
-			break
 		}
+
+		if loopAgainForTool {
+			loopAgainForTool = false
+			continue
+		}
+
+		w.writeDone()
+
+		log.Infof("Copilot API took %s", time.Since(startTime))
+		break
 	}
 
 	return nil
@@ -233,19 +260,20 @@ func validPayload(data []byte, sig string, publicKey *ecdsa.PublicKey) (bool, er
 	return ecdsa.Verify(publicKey, digest[:], parsedSig.R, parsedSig.S), nil
 }
 
-func getFunctionCall(res *copilot.ChatCompletionsResponse) *copilot.ChatMessageFunctionCall {
+func isFunctionCall(res *copilot.ChatCompletionsResponse) bool {
 	if len(res.Choices) == 0 {
-		return nil
+		return false
 	}
 
-	if len(res.Choices[0].Message.ToolCalls) == 0 {
-		return nil
+	for _, choice := range res.Choices {
+		if choice.FinishReason == "tool_calls" {
+			return true
+		}
 	}
 
-	funcCall := res.Choices[0].Message.ToolCalls[0].Function
-	if funcCall == nil {
-		return nil
+	if len(res.Choices[0].Delta.ToolCalls) == 0 {
+		return false
 	}
-	return funcCall
 
+	return true
 }

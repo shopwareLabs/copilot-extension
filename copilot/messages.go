@@ -62,10 +62,48 @@ type Function struct {
 }
 
 type ChatCompletionsResponse struct {
-	Choices []ChatChoice `json:"choices"`
-}
-
-type ChatChoice struct {
-	Index   int         `json:"index"`
-	Message ChatMessage `json:"message"`
+	Choices []struct {
+		FinishReason         string `json:"finish_reason"`
+		Index                int    `json:"index"`
+		ContentFilterOffsets struct {
+			CheckOffset int `json:"check_offset"`
+			StartOffset int `json:"start_offset"`
+			EndOffset   int `json:"end_offset"`
+		} `json:"content_filter_offsets"`
+		ContentFilterResults struct {
+			Error struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+			Hate struct {
+				Filtered bool   `json:"filtered"`
+				Severity string `json:"severity"`
+			} `json:"hate"`
+			SelfHarm struct {
+				Filtered bool   `json:"filtered"`
+				Severity string `json:"severity"`
+			} `json:"self_harm"`
+			Sexual struct {
+				Filtered bool   `json:"filtered"`
+				Severity string `json:"severity"`
+			} `json:"sexual"`
+			Violence struct {
+				Filtered bool   `json:"filtered"`
+				Severity string `json:"severity"`
+			} `json:"violence"`
+		} `json:"content_filter_results"`
+		Delta struct {
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				Function *ChatMessageFunctionCall `json:"function"`
+				ID       string                   `json:"id"`
+				Index    int                      `json:"index"`
+				Type     string                   `json:"type"`
+			} `json:"tool_calls"`
+		} `json:"delta"`
+	} `json:"choices"`
+	Created           int    `json:"created"`
+	ID                string `json:"id"`
+	Model             string `json:"model"`
+	SystemFingerprint string `json:"system_fingerprint"`
 }
