@@ -157,7 +157,7 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 
 		if function != nil {
 			usedTools = append(usedTools, function.Name)
-			log.Debugf("Function CALL: %s", function.Name)
+			log.Infof("Function CALL: %s", function.Name)
 
 			msg, err := handleFunction(ctx, function)
 

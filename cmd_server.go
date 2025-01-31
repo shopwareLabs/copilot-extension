@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/philippgille/chromem-go"
 	"github.com/shopwarelabs/copilot-extension/agent"
 	"github.com/shopwarelabs/copilot-extension/config"
 	"github.com/shopwarelabs/copilot-extension/oauth"
@@ -21,30 +20,25 @@ var serverCmd = &cobra.Command{
 			return fmt.Errorf("failed to fetch public key: %w", err)
 		}
 
-		config, err := config.New()
+		cfg, err := config.New()
 		if err != nil {
 			return fmt.Errorf("error fetching config: %w", err)
 		}
 
-		me, err := url.Parse(config.FQDN)
+		me, err := url.Parse(cfg.FQDN)
 		if err != nil {
 			return fmt.Errorf("unable to parse HOST environment variable: %w", err)
 		}
 
-		db, err := chromem.NewPersistentDB("./db", true)
+		collection, err := config.GetCollection(cfg)
 
 		if err != nil {
-			return err
-		}
-
-		collection, err := db.GetOrCreateCollection("shopware_1", nil, nil)
-		if err != nil {
-			return err
+			return fmt.Errorf("failed to get collection: %w", err)
 		}
 
 		me.Path = "auth/callback"
 
-		oauthService := oauth.NewService(config.ClientID, config.ClientSecret, me.String())
+		oauthService := oauth.NewService(cfg.ClientID, cfg.ClientSecret, me.String())
 		http.HandleFunc("/auth/authorization", oauthService.PreAuth)
 		http.HandleFunc("/auth/callback", oauthService.PostAuth)
 

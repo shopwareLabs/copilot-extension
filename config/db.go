@@ -1,6 +1,8 @@
 package config
 
-import "github.com/philippgille/chromem-go"
+import (
+	"github.com/philippgille/chromem-go"
+)
 
 func GetCollection(cfg *Info) (*chromem.Collection, error) {
 	db, err := chromem.NewPersistentDB("./db", true)
