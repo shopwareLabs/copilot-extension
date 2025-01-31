@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/hashicorp/go-retryablehttp"
 	"github.com/shopwarelabs/copilot-extension/config"
-	"github.com/shopwarelabs/copilot-extension/copilot"
 	"github.com/spf13/cobra"
 )
 
@@ -20,22 +18,13 @@ var cmdSearch = &cobra.Command{
 			return err
 		}
 
-		collection, err := config.GetCollection()
+		collection, err := config.GetCollection(cfg)
 
 		if err != nil {
 			return err
 		}
 
-		embeddings, err := copilot.Embeddings(cmd.Context(), retryablehttp.NewClient(), cfg.LocalGitHubIntegrationID, cfg.LocalGitHubToken, &copilot.EmbeddingsRequest{
-			Model: copilot.ModelEmbeddings,
-			Input: []string{args[0]},
-		})
-
-		if err != nil {
-			return err
-		}
-
-		result, err := collection.QueryEmbedding(cmd.Context(), embeddings.Data[0].Embedding, 20, nil, nil)
+		result, err := collection.Query(cmd.Context(), args[0], 20, nil, nil)
 
 		if err != nil {
 			return err

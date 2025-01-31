@@ -1,0 +1,8 @@
+FROM ollama/ollama
+
+ENV OLLAMA_MODELS /models
+ENV OLLAMA_DEBUG false
+ENV OLLAMA_KEEP_ALIVE -1 
+RUN ollama serve & sleep 5 && ollama pull mxbai-embed-large
+
+ENTRYPOINT ["ollama", "serve"]

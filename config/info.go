@@ -6,9 +6,6 @@ import (
 )
 
 type Info struct {
-	// Port is the local port on which the application will run
-	Port string
-
 	// FQDN (for Fully-Qualified Domain Name) is the internet facing host address
 	// where application will live (e.g. https://example.com)
 	FQDN string
@@ -19,18 +16,15 @@ type Info struct {
 	// ClientSecret comes from your configured GitHub app
 	ClientSecret string
 
-	// LocalGitHubToken is a personal access token for the GitHub API. Used for index command
-	LocalGitHubToken string
-
-	// LocalGitHubIntegrationID is the integration ID for the GitHub app
-	LocalGitHubIntegrationID string
+	// OllamaHost is the host address of the Ollama API
+	OllamaHost string
 }
 
 const (
-	clientIdEnv      = "CLIENT_ID"
-	clientSecretEnv  = "CLIENT_SECRET"
-	fqdnEnv          = "FQDN"
-	localGitHubToken = "LOCAL_GITHUB_TOKEN"
+	clientIdEnv     = "CLIENT_ID"
+	clientSecretEnv = "CLIENT_SECRET"
+	fqdnEnv         = "FQDN"
+	ollamaHost      = "OLLAMA_HOST"
 )
 
 func New() (*Info, error) {
@@ -49,12 +43,15 @@ func New() (*Info, error) {
 		return nil, fmt.Errorf("%s environment variable required", clientSecretEnv)
 	}
 
+	ollamaHost := os.Getenv(ollamaHost)
+	if ollamaHost == "" {
+		ollamaHost = "http://localhost:11434/api"
+	}
+
 	return &Info{
-		Port:                     "8080",
-		FQDN:                     fqdn,
-		ClientID:                 clientID,
-		ClientSecret:             clientSecret,
-		LocalGitHubToken:         os.Getenv(localGitHubToken),
-		LocalGitHubIntegrationID: "679",
+		FQDN:         fqdn,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		OllamaHost:   ollamaHost,
 	}, nil
 }

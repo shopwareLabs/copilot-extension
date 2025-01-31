@@ -16,7 +16,6 @@ and create a `.env` file with the following variables:
 CLIENT_ID=
 CLIENT_SECRET=
 FQDN=<where-the-app-runs>
-LOCAL_GITHUB_TOKEN=<github-token>
 ```
 
 For the client id and client secret you need to create an app in your github account like:

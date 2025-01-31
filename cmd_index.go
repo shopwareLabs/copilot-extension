@@ -5,41 +5,47 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/charmbracelet/log"
-	"github.com/hashicorp/go-retryablehttp"
 	"github.com/philippgille/chromem-go"
 	"github.com/shopwarelabs/copilot-extension/config"
-	"github.com/shopwarelabs/copilot-extension/copilot"
 	"github.com/spf13/cobra"
 	"github.com/tmc/langchaingo/documentloaders"
 	"github.com/tmc/langchaingo/textsplitter"
 )
 
+var (
+	workers int
+)
+
+type indexJob struct {
+	fileName string
+	index    int
+	total    int
+}
+
 var indexCommand = &cobra.Command{
 	Use:   "index",
 	Short: "Embed all files in the data directory to the vector database",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		collection, err := config.GetCollection()
-
-		if err != nil {
-			return err
-		}
-
 		cfg, err := config.New()
 
 		if err != nil {
 			return err
 		}
 
-		fileNames := make([]string, 0)
+		collection, err := config.GetCollection(cfg)
 
-		filepath.WalkDir("data", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		fileNames := make([]string, 0)
+		err = filepath.WalkDir("data", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
-				return nil
+				return err
 			}
 
 			if d.IsDir() {
@@ -57,84 +63,86 @@ var indexCommand = &cobra.Command{
 			return nil
 		})
 
+		if err != nil {
+			return fmt.Errorf("failed to walk directory: %w", err)
+		}
+
+		if len(fileNames) == 0 {
+			return fmt.Errorf("no files found to index")
+		}
+
 		split := textsplitter.NewRecursiveCharacter()
 		split.ChunkSize = 12000
 		split.ChunkOverlap = 30
 
 		filesCount := len(fileNames)
+		jobs := make(chan indexJob)
+		errChan := make(chan error)
+		var wg sync.WaitGroup
 
-		client := retryablehttp.NewClient()
-
-		client.Backoff = retryablehttp.DefaultBackoff
-		client.CheckRetry = retryablehttp.DefaultRetryPolicy
-
-		for i, fileName := range fileNames {
-			content, err := os.Open(fileName)
-
-			if err != nil {
-				continue
-			}
-
-			defer content.Close()
-
-			p := documentloaders.NewText(content)
-
-			docs, err := p.LoadAndSplit(cmd.Context(), split)
-
-			if err != nil {
-				continue
-			}
-
-			log.Infof("Indexing [%d/%d] %s", i+1, filesCount, fileName)
-
-			documents := make([]chromem.Document, 0)
-
-			for idx, doc := range docs {
-				var embeddings *copilot.EmbeddingsResponse
-
-				for {
-					embeddings, err = copilot.Embeddings(cmd.Context(), client, cfg.LocalGitHubIntegrationID, cfg.LocalGitHubToken, &copilot.EmbeddingsRequest{
-						Model: copilot.ModelEmbeddings,
-						Input: []string{doc.PageContent},
-					})
-
-					if err == nil {
-						break
+		// Start worker pool
+		for w := 1; w <= workers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for job := range jobs {
+					content, err := os.Open(job.fileName)
+					if err != nil {
+						errChan <- fmt.Errorf("failed to open file %s: %w", job.fileName, err)
+						continue
 					}
+
+					p := documentloaders.NewText(content)
+					docs, err := p.LoadAndSplit(cmd.Context(), split)
+					content.Close()
 
 					if err != nil {
-						if strings.Contains(err.Error(), "429") {
-							log.Infof("Rate limited slowing down")
-							time.Sleep(time.Second * 3)
-							continue
+						errChan <- fmt.Errorf("failed to split file %s: %w", job.fileName, err)
+						continue
+					}
+
+					log.Infof("Indexing [%d/%d] %s", job.index+1, job.total, job.fileName)
+
+					for idx, doc := range docs {
+						documentId := fmt.Sprintf("%s_%d", job.fileName, idx)
+
+						lookupDoc, err := collection.GetByID(cmd.Context(), documentId)
+
+						if err != nil || lookupDoc.Content != doc.PageContent {
+							if err := collection.AddDocument(cmd.Context(), chromem.Document{
+								ID:      fmt.Sprintf("%s_%d", job.fileName, idx),
+								Content: doc.PageContent,
+							}); err != nil {
+								log.Error("failed to index document", "error", err)
+								continue
+							}
 						}
-
-						log.Infof("File: %s, error: %s", fileName, err.Error())
-						err = nil
-						break
 					}
 				}
+			}()
+		}
 
-				if embeddings != nil {
-					for _, embedding := range embeddings.Data {
-						documents = append(documents, chromem.Document{
-							ID:        fmt.Sprintf("%s_%d", fileName, idx),
-							Content:   doc.PageContent,
-							Embedding: embedding.Embedding,
-						})
-					}
-				} else {
-					break
+		// Error collector
+		go func() {
+			wg.Wait()
+			close(errChan)
+		}()
+
+		// Send jobs to workers
+		go func() {
+			for i, fileName := range fileNames {
+				jobs <- indexJob{
+					fileName: fileName,
+					index:    i,
+					total:    filesCount,
 				}
 			}
+			close(jobs)
+		}()
 
-			if len(documents) == 0 {
-				continue
-			}
-
-			if err := collection.AddDocuments(cmd.Context(), documents, runtime.NumCPU()); err != nil {
-				return err
-			}
+		// Wait for errors
+		for err := range errChan {
+			log.Error("worker error", "error", err)
 		}
 
 		return nil
@@ -142,5 +150,6 @@ var indexCommand = &cobra.Command{
 }
 
 func init() {
+	indexCommand.Flags().IntVarP(&workers, "workers", "w", 4, "Number of parallel workers")
 	rootCmd.AddCommand(indexCommand)
 }

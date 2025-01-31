@@ -12,7 +12,7 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /rag /app/rag
 COPY --from=builder /app/db /app/db
 
-EXPOSE 8080
+EXPOSE 8000
 
 WORKDIR /app
 ENTRYPOINT ["/app/rag"]
