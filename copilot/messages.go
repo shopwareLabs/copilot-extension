@@ -61,26 +61,6 @@ type Function struct {
 	Parameters  *jsonschema.Schema `json:"parameters"`
 }
 
-type EmbeddingsRequest struct {
-	Model Model    `json:"model"`
-	Input []string `json:"input"`
-}
-
-type EmbeddingsResponse struct {
-	Data  []*EmbeddingsResponseData `json:"data"`
-	Usage *EmbeddingsResponseUsage  `json:"usage"`
-}
-
-type EmbeddingsResponseData struct {
-	Embedding []float32 `json:"embedding"`
-	Index     int       `json:"index"`
-}
-
-type EmbeddingsResponseUsage struct {
-	PromptTokens int `json:"prompt_tokens"`
-	TotalTokens  int `json:"total_tokens"`
-}
-
 type ChatCompletionsResponse struct {
 	Choices []ChatChoice `json:"choices"`
 }
