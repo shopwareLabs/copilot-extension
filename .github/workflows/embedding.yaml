@@ -43,7 +43,7 @@ jobs:
                 overwrite: true
     
     build-image:
-      runs-on: ubuntu-24.04
+      runs-on: ubuntu-24.04-arm
       needs: generate-embeddings
       steps:
         - name: Checkout
@@ -74,7 +74,7 @@ jobs:
             provenance: false
 
     build-ollama:
-      runs-on: ubuntu-24.04
+      runs-on: ubuntu-24.04-arm
       steps:
         - name: Checkout
           uses: actions/checkout@v4
