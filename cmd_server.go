@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/shopwarelabs/copilot-extension/agent"
 	"github.com/shopwarelabs/copilot-extension/config"
@@ -42,7 +43,7 @@ var serverCmd = &cobra.Command{
 		http.HandleFunc("/auth/authorization", oauthService.PreAuth)
 		http.HandleFunc("/auth/callback", oauthService.PostAuth)
 
-		agentService := agent.NewService(pubKey, collection)
+		agentService := agent.NewService(pubKey, collection, os.Getenv("DEBUG") == "true")
 
 		http.HandleFunc("/agent", agentService.ChatCompletion)
 

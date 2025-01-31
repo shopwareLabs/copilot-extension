@@ -27,12 +27,14 @@ var fileRegexp = regexp.MustCompile(`(?m)^(.*\.\w+)_\d+$`)
 type Service struct {
 	pubKey     *ecdsa.PublicKey
 	collection *chromem.Collection
+	debugMode  bool
 }
 
-func NewService(pubKey *ecdsa.PublicKey, collection *chromem.Collection) *Service {
+func NewService(pubKey *ecdsa.PublicKey, collection *chromem.Collection, debugMode bool) *Service {
 	return &Service{
 		pubKey:     pubKey,
 		collection: collection,
+		debugMode:  debugMode,
 	}
 }
 
@@ -46,16 +48,17 @@ func (s *Service) ChatCompletion(w http.ResponseWriter, r *http.Request) {
 
 	// Make sure the payload matches the signature. In this way, you can be sure
 	// that an incoming request comes from github
-
-	isValid, err := validPayload(body, r.Header.Get("Github-Public-Key-Signature"), s.pubKey)
-	if err != nil {
-		log.Infof("failed to validate payload signature: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if !isValid {
-		http.Error(w, "invalid payload signature", http.StatusUnauthorized)
-		return
+	if !s.debugMode {
+		isValid, err := validPayload(body, r.Header.Get("Github-Public-Key-Signature"), s.pubKey)
+		if err != nil {
+			log.Infof("failed to validate payload signature: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if !isValid {
+			http.Error(w, "invalid payload signature", http.StatusUnauthorized)
+			return
+		}
 	}
 
 	apiToken := r.Header.Get("X-GitHub-Token")
@@ -67,6 +70,8 @@ func (s *Service) ChatCompletion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	fmt.Printf("Token: %s\n", apiToken)
 
 	if err := s.generateCompletion(r.Context(), integrationID, apiToken, req, NewSSEWriter(w)); err != nil {
 		log.Infof("failed to execute agent: %v\n", err)
