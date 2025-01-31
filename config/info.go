@@ -21,11 +21,10 @@ type Info struct {
 }
 
 const (
-	clientIdEnv      = "CLIENT_ID"
-	clientSecretEnv  = "CLIENT_SECRET"
-	fqdnEnv          = "FQDN"
-	localGitHubToken = "LOCAL_GITHUB_TOKEN"
-	ollamaHost       = "OLLAMA_HOST"
+	clientIdEnv     = "CLIENT_ID"
+	clientSecretEnv = "CLIENT_SECRET"
+	fqdnEnv         = "FQDN"
+	ollamaHost      = "OLLAMA_HOST"
 )
 
 func New() (*Info, error) {
