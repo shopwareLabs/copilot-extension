@@ -41,7 +41,7 @@ func NewService(pubKey *ecdsa.PublicKey, collection *chromem.Collection, debugMo
 func (s *Service) ChatCompletion(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Infof("failed to read request body: %w", err)
+		log.Infof("failed to read request body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -70,8 +70,6 @@ func (s *Service) ChatCompletion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	fmt.Printf("Token: %s\n", apiToken)
 
 	if err := s.generateCompletion(r.Context(), integrationID, apiToken, req, NewSSEWriter(w)); err != nil {
 		log.Infof("failed to execute agent: %v\n", err)
@@ -147,6 +145,7 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 	usedTools := []string{}
 
 	for {
+		startTime := time.Now()
 		chatReq := &copilot.ChatCompletionsRequest{
 			Model:    copilot.ModelGPT4,
 			Messages: messages,
@@ -157,6 +156,8 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 		if err != nil {
 			return fmt.Errorf("failed to get chat completions stream: %w", err)
 		}
+
+		log.Infof("Copilot API took %s", time.Since(startTime))
 
 		function := getFunctionCall(res)
 
