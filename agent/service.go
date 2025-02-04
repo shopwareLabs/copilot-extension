@@ -64,15 +64,20 @@ func (s *Service) ChatCompletion(w http.ResponseWriter, r *http.Request) {
 	apiToken := r.Header.Get("X-GitHub-Token")
 	integrationID := r.Header.Get("Copilot-Integration-Id")
 
+	if s.debugMode {
+		log.Infof("Integration ID: %s", integrationID)
+		log.Infof("API Token: %s", apiToken)
+	}
+
 	var req *copilot.ChatRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Infof("failed to unmarshal request: %v\n", err)
+		log.Infof("failed to unmarshal request: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if err := s.generateCompletion(r.Context(), integrationID, apiToken, req, NewSSEWriter(w)); err != nil {
-		log.Infof("failed to execute agent: %v\n", err)
+		log.Infof("failed to execute agent: %v", err)
 	}
 }
 
@@ -84,7 +89,7 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 
 	loopAgainForTool := false
 
-	function := &copilot.ChatMessageFunctionCall{}
+	functionCalls := make(map[int]*copilot.ChatMessageFunctionCall)
 
 	// Create embeddings from user messages
 	for i := len(req.Messages) - 1; i >= 0; i++ {
@@ -169,33 +174,45 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 
 			if isFunctionCall(streamResp.Response) {
 				if len(streamResp.Response.Choices[0].Delta.ToolCalls) > 0 {
-					if streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Name != "" {
-						function.Name = function.Name + streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Name
-					}
+					for _, toolCall := range streamResp.Response.Choices[0].Delta.ToolCalls {
+						if _, ok := functionCalls[toolCall.Index]; !ok {
+							functionCalls[toolCall.Index] = &copilot.ChatMessageFunctionCall{
+								Name:      "",
+								Arguments: "",
+							}
+						}
 
-					if streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Arguments != "" {
-						function.Arguments = function.Arguments + streamResp.Response.Choices[0].Delta.ToolCalls[0].Function.Arguments
+						tmp := functionCalls[toolCall.Index]
+
+						if toolCall.Function.Name != "" {
+							tmp.Name = tmp.Name + toolCall.Function.Name
+						}
+
+						if toolCall.Function.Arguments != "" {
+							tmp.Arguments = tmp.Arguments + toolCall.Function.Arguments
+						}
 					}
 				}
 
 				if streamResp.Response.Choices[0].FinishReason == "tool_calls" {
-					usedTools = append(usedTools, function.Name)
-					log.Infof("Function CALL: %s", function.Name)
+					for _, function := range functionCalls {
+						usedTools = append(usedTools, function.Name)
+						log.Infof("Function CALL: %s", function.Name)
 
-					msg, err := handleFunction(ctx, function)
+						msg, err := handleFunction(ctx, function)
 
-					function.Name = ""
-					function.Arguments = ""
+						if err != nil {
+							w.writeEvent("copilot_errors")
+							w.writeData([]sseError{{Type: "function", Code: "failed", Message: err.Error(), Identifier: function.Name}})
+							w.writeDone()
 
-					if err != nil {
-						w.writeEvent("copilot_errors")
-						w.writeData([]sseError{{Type: "function", Code: "failed", Message: err.Error(), Identifier: function.Name}})
-						w.writeDone()
+							return fmt.Errorf("failed to handle function: %w", err)
+						}
 
-						return fmt.Errorf("failed to handle function: %w", err)
+						messages = append(messages, *msg)
 					}
 
-					messages = append(messages, *msg)
+					functionCalls = make(map[int]*copilot.ChatMessageFunctionCall)
 
 					log.Infof("Responded function call")
 
