@@ -46,6 +46,7 @@ var serverCmd = &cobra.Command{
 		agentService := agent.NewService(pubKey, collection, os.Getenv("DEBUG") == "true")
 
 		http.HandleFunc("/agent", agentService.ChatCompletion)
+		http.HandleFunc("/search", agent.NewSearchService(collection).Search)
 
 		fmt.Println("Listening on port 8000")
 		return http.ListenAndServe(":8000", nil)
