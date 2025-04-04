@@ -114,10 +114,12 @@ var indexCommand = &cobra.Command{
 						pathSplit := strings.Split(job.fileName, "/")
 						source := pathSplit[1]
 
+						doc.PageContent = re.ReplaceAllString(doc.PageContent, "")
+
 						if err != nil || lookupDoc.Content != doc.PageContent {
 							if err := collection.AddDocument(cmd.Context(), chromem.Document{
 								ID:      fmt.Sprintf("%s_%d", job.fileName, idx),
-								Content: re.ReplaceAllString(doc.PageContent, ""),
+								Content: doc.PageContent,
 								Metadata: map[string]string{
 									"source": source,
 									"file":   job.fileName,
