@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -80,6 +81,8 @@ var indexCommand = &cobra.Command{
 		errChan := make(chan error)
 		var wg sync.WaitGroup
 
+		re := regexp.MustCompile(`(?s)^---\n.*?---\n`)
+
 		// Start worker pool
 		for w := 1; w <= workers; w++ {
 			wg.Add(1)
@@ -108,10 +111,17 @@ var indexCommand = &cobra.Command{
 
 						lookupDoc, err := collection.GetByID(cmd.Context(), documentId)
 
+						pathSplit := strings.Split(job.fileName, "/")
+						source := pathSplit[1]
+
 						if err != nil || lookupDoc.Content != doc.PageContent {
 							if err := collection.AddDocument(cmd.Context(), chromem.Document{
 								ID:      fmt.Sprintf("%s_%d", job.fileName, idx),
-								Content: doc.PageContent,
+								Content: re.ReplaceAllString(doc.PageContent, ""),
+								Metadata: map[string]string{
+									"source": source,
+									"file":   job.fileName,
+								},
 							}); err != nil {
 								log.Error("failed to index document", "error", err)
 								continue
